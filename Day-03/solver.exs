@@ -23,10 +23,27 @@ defmodule Schematic.Digit do
     end)
     |> List.flatten()
   end
+
+  @doc """
+  Returns if any of the given digit's adjacency coordinates are taken up by the
+  given digit. 
+  """
+  def is_adjacent_to?(digit, %Schematic.Symbol{line_num: t_line, char_num: t_char}) do
+    target = {t_line, t_char}
+
+    get_adjacency_coordinates(digit)
+    |> Enum.any?(fn tc -> tc == target end)
+  end
 end
 
 defmodule Schematic do
-  defstruct symbols: [], digits: []
+  @moduledoc """
+  Takes a flat file schematic and turns it into the data structure we need.
+  symbols is a list of all found symbols.
+  digits is a list of all found digits.
+  symbol_map is a 2d map keyed on the x and y coordinates of each symbol.
+  """
+  defstruct symbols: [], digits: [], symbol_map: %{}
 
   @digits ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
 
@@ -143,7 +160,7 @@ defmodule Schematic do
     |> Enum.reduce(cur, fn s, acc -> 
       acc
       |> Map.put_new(s.line_num, %{})
-      |> put_in([s.line_num, s.char_num], s.value)
+      |> put_in([s.line_num, s.char_num], s)
     end)
   end
 
@@ -207,3 +224,55 @@ parsed_input.digits
 #
 # The only thing I could think of was that Reddit's advice about uniq'ing the
 # part numbers was wrong, so I removed the uniq, and got 532428, which is
+# finally correct! 
+
+IO.puts("Finding all gears...")
+
+gear_symbols = Enum.reject(parsed_input.symbols, fn s -> s.value != "*" end)
+IO.puts("Found #{Enum.count(gear_symbols)} gear symbols, checking them...")
+
+empty_gear_map =
+  parsed_input.symbols
+  |> Enum.reject(fn s -> s.value != "*" end)
+  # Turn our list of gear symbols into a map keyed on the Symbol object, containing a list
+  |> Enum.into(%{}, fn x -> {x, []} end)
+
+#IO.inspect(empty_gear_map, limit: :infinity)
+
+gear_map = parsed_input.digits
+           |> Enum.reduce(empty_gear_map, fn d, gear_map_acc -> 
+           # This reduce walks across all digits, and for each digit it gets 
+           # it's adjacencies, and checks to see if any of those coordinates
+           # contain a gear symbol, using the 2D map of all symbols by coord.
+             Schematic.Digit.get_adjacency_coordinates(d)
+             |> Enum.reduce([], fn {line, char}, acc ->
+             # This reduce  walks all adjacency coordinates, and returns a
+             # List containing all of the gear symbols adjacenct to the
+             # current digit (d)
+               case parsed_input.symbol_map[line][char] do
+                 s when s.value == "*" -> [s | acc]
+                 _ -> acc
+               end
+             end)
+             # Now we take that list of gear symbols adjacent to d,
+             # and we find each one in the empty gear map, and add
+             # this digit to it's list.
+             |> Enum.reduce(gear_map_acc, fn s, acc -> 
+                current_adjacent_digits = acc[s]
+                Map.put(acc, s, [d | current_adjacent_digits])
+             end)
+           end) 
+           # Now we have a map of all the gear symbols that have adjacent
+           # digits, so we want to reject it down to only symbols that have
+           # exactly two adjacent digits to find our actual gears.
+           |> Enum.reject(fn {symbol, digit_list} -> Enum.count(digit_list) != 2 end)
+
+# And now we can do things with our completed gear map...
+IO.puts("Calculating gear ratios...")
+
+gear_map
+|> Enum.map(fn {_s, digits} -> Enum.at(digits, 0).value * Enum.at(digits, 1).value end)
+|> Enum.sum()
+|> IO.inspect
+
+# Got sum of all gear ratios to be: 84051670, which was the correct answer!
