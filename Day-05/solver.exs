@@ -158,7 +158,7 @@ almanac.seeds.lines
 IO.puts("Recalculating with seed pairs instead:")
 almanac.seed_pairs
 |> Enum.map(fn p -> 
-  Enum.reduce(p.range_start..(p.range_start+p.length), {nil 0}, fn seed, {acc_val, count} ->
+  Enum.reduce(p.range_start..(p.range_start+p.length), {nil, 0}, fn seed, {acc_val, count} ->
     loc = Almanac.location_for_seed(seed, almanac)
     if acc_val == nil or loc < acc_val do
       #IO.write("\rCurrent Lowest Position: #{loc} (iteration #{count})")
